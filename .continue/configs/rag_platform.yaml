@@ -1,0 +1,14 @@
+# Continue profile: chat -> RAG server -> Ollama (see Continue config dropdown / local profiles).
+# Prereqs: dev_start.bat (port 8000), ollama serve, ollama pull gemma3:4b (and optional gemma3:12b).
+
+name: rag-platform-local
+version: 0.0.1
+schema: v1
+
+models:
+  - name: RAG + Ollama (127.0.0.1:8000)
+    provider: openai
+    model: rag-local
+    apiBase: http://127.0.0.1:8000/v1
+    apiKey: local
+    useResponsesApi: false

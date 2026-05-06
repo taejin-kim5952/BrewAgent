@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Platform — Training Data Manager</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',sans-serif;background:#f1f5f9;color:#0f172a;min-height:100vh}
+  header{background:#fff;border-bottom:1px solid #e2e8f0;padding:14px 24px;display:flex;align-items:center;gap:12px}
+  header h1{font-size:1.1rem;font-weight:600;color:#4f46e5}
+  header span{font-size:.75rem;color:#64748b;background:#f1f5f9;padding:2px 8px;border-radius:12px}
+  .tabs{display:flex;gap:0;border-bottom:1px solid #e2e8f0;padding:0 24px;background:#f8fafc}
+  .tab{padding:12px 20px;cursor:pointer;font-size:.875rem;color:#64748b;border-bottom:2px solid transparent;transition:all .2s}
+  .tab.active{color:#4f46e5;border-bottom-color:#4f46e5}
+  .tab:hover:not(.active){color:#475569}
+  .panel{display:none;padding:24px;max-width:1400px;margin:0 auto}
+  .panel.active{display:block}
+
+  /* Filter bar */
+  .filter-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end}
+  .filter-bar label{font-size:.75rem;color:#64748b;display:flex;flex-direction:column;gap:4px}
+  .filter-bar input,.filter-bar select{background:#fff;border:1px solid #cbd5e1;color:#0f172a;padding:6px 10px;border-radius:6px;font-size:.825rem;outline:none}
+  .filter-bar input:focus,.filter-bar select:focus{border-color:#6366f1;box-shadow:0 0 0 2px #6366f133}
+  .btn{padding:7px 16px;border-radius:6px;border:none;cursor:pointer;font-size:.825rem;font-weight:500;transition:all .15s}
+  .btn-primary{background:#6366f1;color:#fff}.btn-primary:hover{background:#4f46e5}
+  .btn-danger{background:#ef4444;color:#fff}.btn-danger:hover{background:#dc2626}
+  .btn-outline{background:#fff;border:1px solid #cbd5e1;color:#475569}.btn-outline:hover{border-color:#6366f1;color:#4f46e5}
+  .btn-sm{padding:4px 10px;font-size:.775rem}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+
+  /* Table */
+  .table-wrap{overflow-x:auto;border-radius:8px;border:1px solid #e2e8f0;background:#fff}
+  table{width:100%;border-collapse:collapse;font-size:.825rem}
+  thead{background:#f8fafc}
+  th{padding:10px 12px;text-align:left;color:#64748b;font-weight:500;white-space:nowrap}
+  td{padding:10px 12px;border-top:1px solid #e2e8f0;vertical-align:top;line-height:1.5;color:#334155}
+  tr:hover td{background:#f8fafc}
+  .text-truncate{max-width:260px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer}
+  .text-truncate:hover{white-space:normal;overflow:visible}
+
+  /* Stars */
+  .stars{display:inline-flex;gap:2px}
+  .star{cursor:pointer;font-size:1rem;color:#cbd5e1;transition:color .1s}
+  .star.on{color:#d97706}
+  .star:hover,.star:hover~.star{color:#f59e0b}
+
+  /* Score badge */
+  .score{display:inline-block;padding:2px 7px;border-radius:10px;font-size:.75rem;font-weight:600}
+  .score-hi{background:#d1fae5;color:#047857}
+  .score-md{background:#ffedd5;color:#c2410c}
+  .score-lo{background:#e0e7ff;color:#4338ca}
+  .score-none{background:#f1f5f9;color:#64748b}
+
+  /* Export bar */
+  .export-bar{display:flex;align-items:center;gap:10px;margin-top:16px;padding:12px 16px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;flex-wrap:wrap}
+  .export-bar .sel-count{font-size:.825rem;color:#64748b}
+  .export-bar .sel-count strong{color:#4f46e5}
+  .checkbox-all{accent-color:#6366f1;width:14px;height:14px;cursor:pointer}
+
+  /* Manual entry */
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin-bottom:16px}
+  .card h3{font-size:.9rem;font-weight:600;color:#475569;margin-bottom:14px}
+  .form-group{margin-bottom:12px}
+  .form-group label{display:block;font-size:.775rem;color:#64748b;margin-bottom:5px}
+  .form-group textarea{width:100%;background:#fff;border:1px solid #cbd5e1;color:#0f172a;padding:10px;border-radius:6px;font-size:.825rem;resize:vertical;outline:none;font-family:inherit;line-height:1.6}
+  .form-group textarea:focus{border-color:#6366f1;box-shadow:0 0 0 2px #6366f133}
+  .manual-list{margin-top:16px}
+  .manual-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;margin-bottom:8px;display:grid;gap:6px}
+  .manual-item .meta{display:flex;justify-content:space-between;align-items:center}
+  .manual-item .qtext{font-size:.8rem;color:#334155}
+  .manual-item .atext{font-size:.8rem;color:#64748b;border-top:1px solid #e2e8f0;padding-top:6px;margin-top:2px}
+  .manual-item time{font-size:.7rem;color:#94a3b8}
+
+  /* Pagination */
+  .pagination{display:flex;gap:6px;margin-top:12px;justify-content:center}
+  .pagination button{background:#fff;border:1px solid #cbd5e1;color:#475569;padding:4px 12px;border-radius:5px;cursor:pointer;font-size:.8rem}
+  .pagination button.active{background:#6366f1;color:#fff;border-color:#6366f1}
+  .pagination button:hover:not(.active):not(:disabled){border-color:#6366f1;color:#4f46e5}
+  .pagination button:disabled{opacity:.35;cursor:default}
+
+  /* Toast */
+  #toast{position:fixed;bottom:24px;right:24px;background:#1e293b;color:#f8fafc;padding:10px 18px;border-radius:8px;font-size:.825rem;box-shadow:0 10px 40px #0f172a33;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;z-index:9999;max-width:320px}
+  #toast.show{opacity:1;transform:translateY(0)}
+  #toast.err{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+
+  /* Modal */
+  .modal-bg{display:none;position:fixed;inset:0;background:#0f172a66;z-index:1000;align-items:center;justify-content:center}
+  .modal-bg.open{display:flex}
+  .modal{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:24px;max-width:680px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 25px 50px #0f172a22}
+  .modal h3{font-size:.95rem;color:#4f46e5;margin-bottom:12px}
+  .modal pre{background:#f8fafc;padding:12px;border-radius:6px;font-size:.8rem;white-space:pre-wrap;word-break:break-word;color:#334155;border:1px solid #e2e8f0;margin-bottom:12px}
+  .modal-close{float:right;background:none;border:none;color:#64748b;cursor:pointer;font-size:1.1rem}
+  .empty{text-align:center;padding:40px;color:#64748b;font-size:.875rem}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>RAG Platform <span style="font-size:.75rem;color:#7c8cf8;font-weight:500;margin-left:4px">Ver 0.1</span></h1>
+  <span>Training Data Manager</span>
+  <span id="srv-status" style="margin-left:auto"></span>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('interactions')">Continue.dev 대화 내역</div>
+  <div class="tab" onclick="switchTab('manual')">수동 데이터 입력</div>
+  <div class="tab" onclick="switchTab('summary')">문서 요약</div>
+</div>
+
+<!-- ===== TAB 1: Interactions ===== -->
+<div id="panel-interactions" class="panel active">
+  <div class="filter-bar">
+    <label>네임스페이스
+      <input id="f-ns" placeholder="전체" style="width:120px">
+    </label>
+    <label>최소 평점
+      <select id="f-rating" style="width:90px">
+        <option value="">전체</option>
+        <option value="1">1+</option>
+        <option value="2">2+</option>
+        <option value="3">3+</option>
+        <option value="4">4+</option>
+        <option value="5">5</option>
+      </select>
+    </label>
+    <label>최소 AI 점수
+      <select id="f-score" style="width:90px">
+        <option value="">전체</option>
+        <option value="0.5">0.5+</option>
+        <option value="0.6">0.6+</option>
+        <option value="0.7">0.7+</option>
+        <option value="0.8">0.8+</option>
+        <option value="0.9">0.9+</option>
+      </select>
+    </label>
+    <label style="justify-content:flex-end">
+      <button class="btn btn-primary" onclick="loadInteractions()">검색</button>
+    </label>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th><input type="checkbox" class="checkbox-all" id="chk-all" onchange="toggleAll(this)"></th>
+          <th>질문</th>
+          <th>답변 미리보기</th>
+          <th>AI 점수</th>
+          <th>내 평점</th>
+          <th>모델</th>
+          <th>날짜</th>
+        </tr>
+      </thead>
+      <tbody id="interaction-tbody">
+        <tr><td colspan="7" class="empty">데이터를 불러오는 중...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination" id="page-ctrl"></div>
+
+  <div class="export-bar">
+    <span class="sel-count">선택됨: <strong id="sel-count">0</strong>개</span>
+    <label style="font-size:.8rem;color:#64748b;display:flex;align-items:center;gap:6px">
+      <input type="checkbox" id="inc-manual" style="accent-color:#6366f1"> 수동 입력 포함
+    </label>
+    <label style="font-size:.8rem;color:#64748b;display:flex;align-items:center;gap:6px">
+      형식:
+      <select id="exp-format" style="background:#fff;border:1px solid #cbd5e1;color:#0f172a;padding:5px 8px;border-radius:5px;font-size:.8rem">
+        <option value="alpaca">Alpaca</option>
+        <option value="openai">OpenAI</option>
+        <option value="sharegpt">ShareGPT</option>
+      </select>
+    </label>
+    <button class="btn btn-primary" onclick="exportSelected()">선택 내보내기</button>
+    <button class="btn btn-outline" onclick="exportAll()">전체 내보내기</button>
+  </div>
+</div>
+
+<!-- ===== TAB 2: Manual ===== -->
+<div id="panel-manual" class="panel">
+  <div class="card">
+    <h3>새 훈련 데이터 추가</h3>
+    <div class="form-group">
+      <label>질문 (Instruction)</label>
+      <textarea id="m-instruction" rows="4" placeholder="AI가 학습할 질문 또는 지시사항을 입력하세요"></textarea>
+    </div>
+    <div class="form-group">
+      <label>답변 (Output)</label>
+      <textarea id="m-output" rows="6" placeholder="이상적인 답변을 입력하세요"></textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="saveManual()">저장</button>
+      <button class="btn btn-outline" onclick="clearManualForm()">초기화</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">수동 입력 목록 (<span id="manual-count">0</span>개)</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="man-exp-format" style="background:#fff;border:1px solid #cbd5e1;color:#0f172a;padding:5px 8px;border-radius:5px;font-size:.8rem">
+          <option value="alpaca">Alpaca</option>
+          <option value="openai">OpenAI</option>
+          <option value="sharegpt">ShareGPT</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="exportManualOnly()">전체 내보내기</button>
+      </div>
+    </div>
+    <div id="manual-list" class="manual-list">
+      <div class="empty">저장된 데이터가 없습니다.</div>
+    </div>
+    <div class="pagination" id="manual-page-ctrl"></div>
+  </div>
+</div>
+
+<!-- ===== TAB 3: Summary ===== -->
+<div id="panel-summary" class="panel">
+  <div class="card">
+    <h3>문서 업로드 → AI 요약</h3>
+    <p style="font-size:.8rem;color:#64748b;margin-bottom:12px">
+      PDF, WORD, PPT, Excel, TXT, 이미지(OCR), 코드 파일 지원.
+      <strong style="color:#7c8cf8">압축 파일(.zip / .tar / .tar.gz / .tgz)</strong>도 업로드하면 내부 모든 문서를 풀어서 통합 요약합니다.<br>
+      <strong>문서는 인덱싱되지 않고 요약만 수행됩니다.</strong>
+    </p>
+
+    <div class="form-group">
+      <label>파일 선택</label>
+      <input type="file" id="sum-file" accept=".pdf,.docx,.pptx,.xlsx,.xls,.txt,.md,.csv,.png,.jpg,.jpeg,.java,.sql,.py,.js,.ts,.go,.zip,.tar,.gz,.tgz,.bz2,.tbz2" style="background:#fff;border:1px solid #cbd5e1;color:#0f172a;padding:8px;border-radius:6px;width:100%">
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="form-group" style="margin:0">
+        <label>요약 분량</label>
+        <select id="sum-length" style="width:100%;background:#fff;border:1px solid #cbd5e1;color:#0f172a;padding:7px;border-radius:6px;font-size:.825rem">
+          <option value="short">짧게 (3~5줄)</option>
+          <option value="medium" selected>보통 (10줄)</option>
+          <option value="long">자세히 (섹션별)</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>언어</label>
+        <select id="sum-lang" style="width:100%;background:#fff;border:1px solid #cbd5e1;color:#0f172a;padding:7px;border-radius:6px;font-size:.825rem">
+          <option value="ko" selected>한국어</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>모델</label>
+        <select id="sum-model" style="width:100%;background:#fff;border:1px solid #cbd5e1;color:#0f172a;padding:7px;border-radius:6px;font-size:.825rem">
+          <option value="fast" selected>gemma4 (기본)</option>
+          <option value="full">gemma4 (동일)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-primary" id="sum-btn" onclick="runSummary()">요약 시작</button>
+      <span id="sum-status" style="font-size:.8rem;color:#64748b"></span>
+    </div>
+  </div>
+
+  <div class="card" id="sum-result-card" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">요약 결과</h3>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-outline btn-sm" onclick="copySummary()">복사</button>
+        <button class="btn btn-primary btn-sm" onclick="saveSummaryAsManual()">수동 데이터로 저장</button>
+      </div>
+    </div>
+    <div id="sum-meta" style="font-size:.78rem;color:#64748b;margin-bottom:12px;padding:8px 12px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0"></div>
+    <div id="sum-output" style="background:#fff;border:1px solid #e2e8f0;padding:14px 16px;border-radius:6px;font-size:.875rem;line-height:1.7;white-space:pre-wrap;color:#0f172a;max-height:60vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-bg" id="detail-modal" onclick="closeModal(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="document.getElementById('detail-modal').classList.remove('open')">✕</button>
+    <h3 id="modal-title">질문</h3>
+    <pre id="modal-q"></pre>
+    <h3>답변</h3>
+    <pre id="modal-a"></pre>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '';
+let interactions = [];
+let iPage = 0;
+const iPageSize = 20;
+let mPage = 0;
+const mPageSize = 10;
+
+// ─── Tabs ───────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'manual') loadManual();
+}
+
+// ─── Summary ─────────────────────────────────────────
+let lastSummary = null; // {filename, summary}
+
+async function runSummary() {
+  const fileInput = document.getElementById('sum-file');
+  if (!fileInput.files.length) { toast('파일을 선택해주세요', true); return; }
+  const file = fileInput.files[0];
+
+  const btn = document.getElementById('sum-btn');
+  const status = document.getElementById('sum-status');
+  const resultCard = document.getElementById('sum-result-card');
+
+  btn.disabled = true;
+  btn.textContent = '요약 중...';
+  status.textContent = '문서 파싱 + Ollama 요약 진행 중 (모델/문서 크기에 따라 수십 초~수 분 소요)';
+  resultCard.style.display = 'none';
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('length', document.getElementById('sum-length').value);
+  fd.append('language', document.getElementById('sum-lang').value);
+  fd.append('model_choice', document.getElementById('sum-model').value);
+
+  try {
+    const res = await fetch(`${API}/v1/ingest/summarize`, { method:'POST', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(err.detail || '요약 실패', true);
+      status.textContent = '실패: ' + (err.detail || res.status);
+      return;
+    }
+    const data = await res.json();
+    lastSummary = { filename: data.filename, summary: data.summary };
+
+    document.getElementById('sum-meta').innerHTML =
+      `<strong>${esc(data.filename)}</strong> · ${data.doc_type} · ${data.char_count.toLocaleString()}자 · ` +
+      `청크 ${data.chunk_count}개 · 모델: ${data.model_used} · 모드: ${data.mode}` +
+      (data.errors && data.errors.length ? `<br><span style="color:#dc2626">⚠ ${data.errors.length}개 경고</span>` : '');
+    document.getElementById('sum-output').textContent = data.summary;
+    resultCard.style.display = 'block';
+    status.textContent = '완료';
+    toast('✓ 요약 완료');
+  } catch(e) {
+    toast('오류: ' + e.message, true);
+    status.textContent = '오류: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '요약 시작';
+  }
+}
+
+function copySummary() {
+  if (!lastSummary) return;
+  navigator.clipboard.writeText(lastSummary.summary).then(
+    () => toast('복사됨'),
+    () => toast('복사 실패', true)
+  );
+}
+
+async function saveSummaryAsManual() {
+  if (!lastSummary) return;
+  const instruction = `다음 문서를 요약해주세요: ${lastSummary.filename}`;
+  try {
+    const res = await fetch(`${API}/v1/dataset/manual`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ instruction, output: lastSummary.summary })
+    });
+    if (!res.ok) { toast('저장 실패', true); return; }
+    toast('수동 데이터로 저장됨');
+  } catch(e) { toast('오류: ' + e.message, true); }
+}
+
+// ─── Toast ──────────────────────────────────────────
+function toast(msg, isErr) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.className = '', 2800);
+}
+
+// ─── Interactions ────────────────────────────────────
+async function loadInteractions(page) {
+  if (page !== undefined) iPage = page;
+  const ns = document.getElementById('f-ns').value.trim();
+  const rating = document.getElementById('f-rating').value;
+  const score = document.getElementById('f-score').value;
+
+  let url = `${API}/v1/dataset/interactions?limit=200&offset=0`;
+  if (ns) url += `&namespace=${encodeURIComponent(ns)}`;
+  if (rating) url += `&min_rating=${rating}`;
+  if (score) url += `&min_eval_score=${score}`;
+
+  const tbody = document.getElementById('interaction-tbody');
+  tbody.innerHTML = `<tr><td colspan="7" class="empty">불러오는 중...</td></tr>`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    interactions = data.items || [];
+    renderInteractions();
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty" style="color:#f87171">오류: ${e.message}</td></tr>`;
+  }
+}
+
+function renderInteractions() {
+  const tbody = document.getElementById('interaction-tbody');
+  const start = iPage * iPageSize;
+  const page = interactions.slice(start, start + iPageSize);
+
+  if (!page.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">대화 내역이 없습니다.<br><small style="color:#475569">Continue.dev에서 질문하면 자동으로 기록됩니다.</small></td></tr>`;
+    renderPageCtrl('page-ctrl', interactions.length, iPageSize, iPage, p => loadInteractions(p));
+    return;
+  }
+
+  tbody.innerHTML = page.map(r => {
+    const score = r.eval_score != null
+      ? `<span class="score ${r.eval_score>=0.8?'score-hi':r.eval_score>=0.6?'score-md':'score-lo'}">${r.eval_score.toFixed(2)}</span>`
+      : `<span class="score score-none">-</span>`;
+    const stars = [1,2,3,4,5].map(n =>
+      `<span class="star${(r.user_rating||0)>=n?' on':''}" onclick="rateItem('${r.interaction_id}',${n},this)">★</span>`
+    ).join('');
+    const d = r.created_at ? r.created_at.slice(0,16).replace('T',' ') : '-';
+    return `<tr>
+      <td><input type="checkbox" class="row-chk" value="${r.interaction_id}" style="accent-color:#6366f1" onchange="updateSelCount()"></td>
+      <td><div class="text-truncate" style="max-width:220px" onclick="showDetail('${r.interaction_id}')">${esc(r.query)}</div></td>
+      <td><div class="text-truncate" style="max-width:260px" onclick="showDetail('${r.interaction_id}')">${esc(r.response)}</div></td>
+      <td>${score}</td>
+      <td><div class="stars">${stars}</div></td>
+      <td style="font-size:.75rem;color:#475569">${r.routing||'-'}</td>
+      <td style="font-size:.75rem;color:#475569;white-space:nowrap">${d}</td>
+    </tr>`;
+  }).join('');
+
+  renderPageCtrl('page-ctrl', interactions.length, iPageSize, iPage, p => { iPage=p; renderInteractions(); });
+  updateSelCount();
+}
+
+function toggleAll(chk) {
+  document.querySelectorAll('.row-chk').forEach(c => c.checked = chk.checked);
+  updateSelCount();
+}
+
+function updateSelCount() {
+  const n = document.querySelectorAll('.row-chk:checked').length;
+  document.getElementById('sel-count').textContent = n;
+}
+
+async function rateItem(id, rating, starEl) {
+  try {
+    await fetch(`${API}/v1/dataset/interactions/${id}/rating`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({rating})
+    });
+    const row = starEl.closest('tr');
+    row.querySelectorAll('.star').forEach((s,i) => s.classList.toggle('on', i < rating));
+    const rec = interactions.find(r => r.interaction_id === id);
+    if (rec) rec.user_rating = rating;
+    toast('평점 저장됨');
+  } catch(e) { toast('저장 실패', true); }
+}
+
+function showDetail(id) {
+  const r = interactions.find(x => x.interaction_id === id);
+  if (!r) return;
+  document.getElementById('modal-q').textContent = r.query;
+  document.getElementById('modal-a').textContent = r.response;
+  document.getElementById('detail-modal').classList.add('open');
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('detail-modal'))
+    document.getElementById('detail-modal').classList.remove('open');
+}
+
+async function exportSelected() {
+  const ids = [...document.querySelectorAll('.row-chk:checked')].map(c => c.value);
+  const incManual = document.getElementById('inc-manual').checked;
+  if (!ids.length && !incManual) { toast('선택된 항목이 없습니다', true); return; }
+  const fmt = document.getElementById('exp-format').value;
+  await doExport({format: fmt, interaction_ids: ids, include_manual: incManual});
+}
+
+async function exportAll() {
+  const fmt = document.getElementById('exp-format').value;
+  const incManual = document.getElementById('inc-manual').checked;
+  await doExport({format: fmt, include_manual: incManual});
+}
+
+async function exportManualOnly() {
+  const fmt = document.getElementById('man-exp-format').value;
+  await doExport({format: fmt, interaction_ids: [], include_manual: true});
+}
+
+async function doExport(body) {
+  try {
+    const res = await fetch(`${API}/v1/dataset/export`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      toast(err.detail || '내보내기 실패', true);
+      return;
+    }
+    const data = await res.json();
+    toast(`✓ ${data.record_count}개 내보내기 완료`);
+    const a = document.createElement('a');
+    a.href = data.download_url;
+    a.download = data.filename;
+    a.click();
+  } catch(e) { toast('내보내기 오류: ' + e.message, true); }
+}
+
+// ─── Manual ─────────────────────────────────────────
+async function loadManual(page) {
+  if (page !== undefined) mPage = page;
+  try {
+    const res = await fetch(`${API}/v1/dataset/manual?limit=200&offset=0`);
+    const data = await res.json();
+    renderManual(data.items || []);
+  } catch(e) { toast('목록 로드 실패', true); }
+}
+
+function renderManual(items) {
+  document.getElementById('manual-count').textContent = items.length;
+  const el = document.getElementById('manual-list');
+  if (!items.length) {
+    el.innerHTML = '<div class="empty">저장된 데이터가 없습니다.</div>';
+    document.getElementById('manual-page-ctrl').innerHTML = '';
+    return;
+  }
+  const start = mPage * mPageSize;
+  const page = items.slice(start, start + mPageSize);
+  el.innerHTML = page.map(m => {
+    const d = m.created_at ? m.created_at.slice(0,16).replace('T',' ') : '';
+    return `<div class="manual-item">
+      <div class="meta"><time>${d}</time><button class="btn btn-danger btn-sm" onclick="deleteManual('${m.entry_id}')">삭제</button></div>
+      <div class="qtext"><strong>Q:</strong> ${esc(m.instruction)}</div>
+      <div class="atext"><strong>A:</strong> ${esc(m.output)}</div>
+    </div>`;
+  }).join('');
+  renderPageCtrl('manual-page-ctrl', items.length, mPageSize, mPage, p => { mPage=p; loadManual(); });
+}
+
+async function saveManual() {
+  const instruction = document.getElementById('m-instruction').value.trim();
+  const output = document.getElementById('m-output').value.trim();
+  if (!instruction || !output) { toast('질문과 답변을 모두 입력해주세요', true); return; }
+  try {
+    const res = await fetch(`${API}/v1/dataset/manual`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({instruction, output})
+    });
+    if (!res.ok) { toast('저장 실패', true); return; }
+    toast('저장됨');
+    clearManualForm();
+    loadManual();
+  } catch(e) { toast('오류: ' + e.message, true); }
+}
+
+async function deleteManual(id) {
+  if (!confirm('삭제하시겠습니까?')) return;
+  try {
+    await fetch(`${API}/v1/dataset/manual/${id}`, {method:'DELETE'});
+    toast('삭제됨');
+    loadManual();
+  } catch(e) { toast('삭제 오류', true); }
+}
+
+function clearManualForm() {
+  document.getElementById('m-instruction').value = '';
+  document.getElementById('m-output').value = '';
+}
+
+// ─── Pagination ──────────────────────────────────────
+function renderPageCtrl(containerId, total, pageSize, current, onPage) {
+  const pages = Math.ceil(total / pageSize);
+  const el = document.getElementById(containerId);
+  if (pages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  html += `<button ${current===0?'disabled':''} onclick="(${onPage.toString()})(${current-1})">&lsaquo;</button>`;
+  for (let i = 0; i < pages; i++) {
+    if (pages > 7 && Math.abs(i - current) > 2 && i !== 0 && i !== pages-1) {
+      if (i === 1 || i === pages-2) html += '<button disabled>…</button>';
+      continue;
+    }
+    html += `<button class="${i===current?'active':''}" onclick="(${onPage.toString()})(${i})">${i+1}</button>`;
+  }
+  html += `<button ${current===pages-1?'disabled':''} onclick="(${onPage.toString()})(${current+1})">&rsaquo;</button>`;
+  el.innerHTML = html;
+}
+
+// ─── Utils ───────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Health ─────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/health`);
+    const d = await r.json();
+    const ok = d.status === 'healthy';
+    document.getElementById('srv-status').textContent = ok ? '● 서버 정상' : '● 서버 이상';
+    document.getElementById('srv-status').style.color = ok ? '#34d399' : '#f87171';
+  } catch {
+    document.getElementById('srv-status').textContent = '● 연결 불가';
+    document.getElementById('srv-status').style.color = '#f87171';
+  }
+}
+
+// ─── Init ────────────────────────────────────────────
+checkHealth();
+loadInteractions();
+</script>
+</body>
+</html>

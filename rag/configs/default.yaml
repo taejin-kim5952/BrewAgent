@@ -1,0 +1,48 @@
+# RAG Platform 기본 설정
+
+embedding:
+  model_name: "sentence-transformers/all-MiniLM-L6-v2"
+  device: "cpu"
+  batch_size: 32
+  dimension: 384
+
+chunking:
+  default_strategy: "sliding_window"
+  chunk_size: 512
+  chunk_overlap: 64
+  code_chunk_size: 1024
+  table_chunk_size: 256
+
+ollama:
+  base_url: "http://localhost:11434"
+  model_fast: "gemma4:latest"
+  model_full: "gemma4:latest"
+  timeout_seconds: 120
+
+routing:
+  complexity_threshold_fast: 0.3
+  complexity_threshold_full: 0.7
+  force_local: true
+
+retrieval:
+  top_k: 10
+  vector_weight: 0.7
+  bm25_weight: 0.3
+  rerank_top_k: 5
+  max_context_tokens: 4096
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  log_level: "INFO"
+
+storage:
+  base_dir: "../storage"
+
+evaluation:
+  auto_eval: true
+  min_score_for_memory: 0.75
+
+dataset:
+  min_rating: 4
+  min_eval_score: 0.7

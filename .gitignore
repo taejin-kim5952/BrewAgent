@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Storage / Runtime data
+storage/
+*.db
+*.db-journal
+*.faiss
+*.pkl
+
+# Logs
+*.log
+logs/
+dev_server*.log
+dev_server.log
+rag_install.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.spec
+
+# Local config overrides
+rag/configs/local.yaml
+
+# Test data / temp
+*.tmp
+.tmp/
+tmp/
+test_uploads/
+
+# Model files (too large for git)
+*.gguf
+*.safetensors
+*.bin
+*.onnx
+
+# Exports (user data)
+exports/
+
+# OS
+.cache/
