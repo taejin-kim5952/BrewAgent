@@ -106,6 +106,7 @@
   <div class="tab active" onclick="switchTab('interactions')">Continue.dev 대화 내역</div>
   <div class="tab" onclick="switchTab('manual')">수동 데이터 입력</div>
   <div class="tab" onclick="switchTab('summary')">문서 요약</div>
+  <div class="tab" onclick="switchTab('guide')">가이드 → 훈련 데이터</div>
 </div>
 
 <!-- ===== TAB 1: Interactions ===== -->
@@ -273,6 +274,274 @@
   </div>
 </div>
 
+<!-- ===== TAB 4: Guide → Training Data ===== -->
+<div id="panel-guide" class="panel">
+
+  <!-- 영역 A: 가이드 업로드 + 목록 -->
+  <div class="card">
+    <h3>가이드 업로드</h3>
+    <p style="font-size:.8rem;color:#64748b;margin-bottom:12px">
+      회사 보안/품질/네이밍 가이드(PDF/Word)를 업로드하면 AI가 규칙 단위로 자동 분할합니다.
+      추출된 규칙을 검수/편집한 뒤 Phase 2(다음 업데이트)에서 Q&amp;A 훈련 데이터로 변환할 수 있습니다.
+    </p>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr auto;gap:10px;align-items:end">
+      <div class="form-group" style="margin:0">
+        <label>가이드 파일 (PDF/Word)</label>
+        <input type="file" id="g-file" accept=".pdf,.docx,.doc" style="background:#fff;border:1px solid #cbd5e1;color:#0f172a;padding:8px;border-radius:6px;width:100%">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>가이드 별칭</label>
+        <input type="text" id="g-name" placeholder="예: 우리회사 보안 가이드 v3" style="background:#fff;border:1px solid #cbd5e1;color:#0f172a;padding:8px;border-radius:6px;width:100%;font-size:.825rem">
+      </div>
+      <button class="btn btn-primary" id="g-upload-btn" onclick="uploadGuide()">업로드</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">업로드된 가이드 (<span id="g-count">0</span>)</h3>
+      <button class="btn btn-outline btn-sm" onclick="loadGuides()">새로고침</button>
+    </div>
+    <div id="g-list">
+      <div class="empty">아직 업로드된 가이드가 없습니다.</div>
+    </div>
+  </div>
+
+  <!-- 영역 B: 선택된 가이드의 규칙 검수 -->
+  <div class="card" id="g-rules-card" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0" id="g-rules-title">규칙 목록</h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="addManualRule()">+ 규칙 추가</button>
+        <button class="btn btn-outline btn-sm" id="g-merge-btn" onclick="mergeSelected()" disabled>선택 병합</button>
+        <button class="btn btn-outline btn-sm" onclick="finalizeGuide()">구조 확정</button>
+        <button class="btn btn-primary btn-sm" onclick="openQAGenerate()">Q&amp;A 생성 →</button>
+      </div>
+    </div>
+
+    <div class="filter-bar" style="margin-bottom:12px">
+      <label>카테고리
+        <select id="g-filter-cat" onchange="renderRules()" style="width:130px">
+          <option value="">전체</option>
+          <option value="보안">보안</option>
+          <option value="품질">품질</option>
+          <option value="네이밍">네이밍</option>
+          <option value="테스트">테스트</option>
+          <option value="로깅">로깅</option>
+          <option value="트랜잭션">트랜잭션</option>
+          <option value="API">API</option>
+          <option value="성능">성능</option>
+          <option value="예외처리">예외처리</option>
+          <option value="기타">기타</option>
+        </select>
+      </label>
+      <label>심각도
+        <select id="g-filter-sev" onchange="renderRules()" style="width:110px">
+          <option value="">전체</option>
+          <option value="must">MUST</option>
+          <option value="should">SHOULD</option>
+          <option value="may">MAY</option>
+          <option value="unknown">unknown</option>
+        </select>
+      </label>
+      <label>검수 상태
+        <select id="g-filter-rev" onchange="renderRules()" style="width:110px">
+          <option value="">전체</option>
+          <option value="0">미검수</option>
+          <option value="1">검수완료</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="g-rules-list">
+      <div class="empty">규칙이 없습니다.</div>
+    </div>
+  </div>
+
+  <!-- Q&A 검수 카드 -->
+  <div class="card" id="g-qa-card" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0" id="g-qa-title">생성된 Q&amp;A</h3>
+      <div style="font-size:.78rem;color:#64748b" id="g-qa-stats"></div>
+    </div>
+
+    <div class="filter-bar" style="margin-bottom:12px">
+      <label>유형
+        <select id="g-qa-filter-type" onchange="renderQA()" style="width:130px">
+          <option value="">전체</option>
+          <option value="code_review">코드 리뷰</option>
+          <option value="code_gen">코드 생성</option>
+          <option value="concept">개념 설명</option>
+          <option value="refusal">거절</option>
+        </select>
+      </label>
+      <label>상태
+        <select id="g-qa-filter-status" onchange="renderQA()" style="width:120px">
+          <option value="pending">검수 대기</option>
+          <option value="approved">승인됨</option>
+          <option value="rejected">거절됨</option>
+          <option value="">전체</option>
+        </select>
+      </label>
+      <label>규칙
+        <select id="g-qa-filter-rule" onchange="renderQA()" style="width:200px">
+          <option value="">전체 규칙</option>
+        </select>
+      </label>
+      <label style="justify-content:flex-end">
+        <button class="btn btn-outline btn-sm" onclick="loadQA()">새로고침</button>
+      </label>
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" id="g-qa-bulk-approve" onclick="bulkQAAction('approve')" disabled>선택 승인</button>
+      <button class="btn btn-outline btn-sm" id="g-qa-bulk-reject" onclick="bulkQAAction('reject')" disabled>선택 거절</button>
+      <button class="btn btn-danger btn-sm" id="g-qa-bulk-delete" onclick="bulkQAAction('delete')" disabled>선택 삭제</button>
+      <span style="font-size:.78rem;color:#64748b;align-self:center;margin-left:auto">
+        선택된 항목: <span id="g-qa-selected-count">0</span>
+      </span>
+    </div>
+
+    <div id="g-qa-list">
+      <div class="empty">아직 생성된 Q&amp;A가 없습니다. 위의 [Q&amp;A 생성] 버튼을 눌러 시작하세요.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Q&A 생성 옵션 모달 -->
+<div class="modal-bg" id="qa-gen-modal" onclick="closeQAGenModal(event)">
+  <div class="modal" style="max-width:560px">
+    <button class="modal-close" onclick="closeQAGenModal()">✕</button>
+    <h3>Q&amp;A 자동 생성</h3>
+    <p style="font-size:.8rem;color:#64748b;margin-bottom:14px">
+      현재 가이드의 규칙들을 기반으로 파인튜닝용 Q&amp;A 쌍을 자동 생성합니다.<br>
+      생성 비율: 코드 리뷰 50% / 코드 생성 30% / 개념 설명 15% / 거절 5%
+    </p>
+
+    <div class="form-group">
+      <label>규칙당 생성 개수</label>
+      <select id="qa-gen-count" style="width:100%;background:#fff;border:1px solid #cbd5e1;padding:7px;border-radius:6px;font-size:.85rem">
+        <option value="3">3개 (빠름, 품질 낮음)</option>
+        <option value="5" selected>5개 (권장, 균형)</option>
+        <option value="8">8개 (다양성 높음)</option>
+        <option value="10">10개 (많이, 오래 걸림)</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="qa-gen-only-reviewed" style="accent-color:#7c8cf8">
+        검수 완료된 규칙만 사용
+      </label>
+    </div>
+
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="qa-gen-overwrite" style="accent-color:#7c8cf8">
+        기존 Q&amp;A 모두 삭제 후 재생성 (주의: 승인된 것도 삭제됨)
+      </label>
+    </div>
+
+    <div id="qa-gen-estimate" style="font-size:.8rem;color:#7c8cf8;background:#eef2ff;padding:8px 12px;border-radius:6px;margin-bottom:14px"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeQAGenModal()">취소</button>
+      <button class="btn btn-primary" onclick="startQAGeneration()">생성 시작</button>
+    </div>
+  </div>
+</div>
+
+<!-- Q&A 편집 모달 -->
+<div class="modal-bg" id="qa-edit-modal" onclick="closeQAEditModal(event)">
+  <div class="modal" style="max-width:780px">
+    <button class="modal-close" onclick="closeQAEditModal()">✕</button>
+    <h3>Q&amp;A 편집</h3>
+    <input type="hidden" id="qe-id">
+    <div id="qe-meta" style="font-size:.78rem;color:#64748b;margin-bottom:12px;padding:8px 12px;background:#f8fafc;border-radius:6px"></div>
+    <div class="form-group">
+      <label>유형</label>
+      <select id="qe-type" style="width:100%;background:#fff;border:1px solid #cbd5e1;padding:7px;border-radius:6px;font-size:.85rem">
+        <option value="code_review">코드 리뷰</option>
+        <option value="code_gen">코드 생성</option>
+        <option value="concept">개념 설명</option>
+        <option value="refusal">거절</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>질문 (instruction)</label>
+      <textarea id="qe-instruction" rows="4" style="width:100%;background:#fff;border:1px solid #cbd5e1;padding:8px;border-radius:6px;font-size:.85rem;font-family:inherit;resize:vertical"></textarea>
+    </div>
+    <div class="form-group">
+      <label>답변 (output)</label>
+      <textarea id="qe-output" rows="10" style="width:100%;background:#fff;border:1px solid #cbd5e1;padding:8px;border-radius:6px;font-size:.85rem;font-family:'Consolas',monospace;resize:vertical"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeQAEditModal()">취소</button>
+      <button class="btn btn-primary" onclick="saveQAEdit()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 규칙 편집 모달 -->
+<div class="modal-bg" id="rule-edit-modal" onclick="closeRuleEditModal(event)">
+  <div class="modal" style="max-width:760px">
+    <button class="modal-close" onclick="closeRuleEditModal()">✕</button>
+    <h3 id="rule-edit-title">규칙 편집</h3>
+    <input type="hidden" id="re-id">
+    <div class="form-group">
+      <label>절번호 / 라벨</label>
+      <input type="text" id="re-section" style="width:100%;background:#fff;border:1px solid #cbd5e1;padding:7px;border-radius:6px;font-size:.85rem">
+    </div>
+    <div class="form-group">
+      <label>제목</label>
+      <input type="text" id="re-title-input" style="width:100%;background:#fff;border:1px solid #cbd5e1;padding:7px;border-radius:6px;font-size:.85rem">
+    </div>
+    <div class="form-group">
+      <label>본문</label>
+      <textarea id="re-body" rows="5" style="width:100%;background:#fff;border:1px solid #cbd5e1;padding:8px;border-radius:6px;font-size:.85rem;font-family:inherit;resize:vertical"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label>카테고리</label>
+        <select id="re-cat" style="width:100%;background:#fff;border:1px solid #cbd5e1;padding:7px;border-radius:6px;font-size:.85rem">
+          <option value="보안">보안</option>
+          <option value="품질">품질</option>
+          <option value="네이밍">네이밍</option>
+          <option value="테스트">테스트</option>
+          <option value="로깅">로깅</option>
+          <option value="트랜잭션">트랜잭션</option>
+          <option value="API">API</option>
+          <option value="성능">성능</option>
+          <option value="예외처리">예외처리</option>
+          <option value="기타">기타</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>심각도</label>
+        <select id="re-sev" style="width:100%;background:#fff;border:1px solid #cbd5e1;padding:7px;border-radius:6px;font-size:.85rem">
+          <option value="must">MUST (필수)</option>
+          <option value="should">SHOULD (권장)</option>
+          <option value="may">MAY (선택)</option>
+          <option value="unknown">unknown</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>잘못된 코드 예 (선택)</label>
+      <textarea id="re-bad" rows="4" style="width:100%;background:#fff;border:1px solid #cbd5e1;padding:8px;border-radius:6px;font-size:.8rem;font-family:'Consolas',monospace;resize:vertical"></textarea>
+    </div>
+    <div class="form-group">
+      <label>모범 코드 예 (선택)</label>
+      <textarea id="re-good" rows="4" style="width:100%;background:#fff;border:1px solid #cbd5e1;padding:8px;border-radius:6px;font-size:.8rem;font-family:'Consolas',monospace;resize:vertical"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeRuleEditModal()">취소</button>
+      <button class="btn btn-primary" onclick="saveRuleEdit()">저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- Detail Modal -->
 <div class="modal-bg" id="detail-modal" onclick="closeModal(event)">
   <div class="modal">
@@ -301,6 +570,634 @@ function switchTab(name) {
   event.target.classList.add('active');
   document.getElementById('panel-' + name).classList.add('active');
   if (name === 'manual') loadManual();
+  if (name === 'guide') { loadGuides(); startGuidePolling(); } else { stopGuidePolling(); }
+}
+
+// ─── Guide → Training Data ─────────────────────────
+let currentGuideId = null;
+let currentRules = [];
+let guidePollTimer = null;
+
+async function uploadGuide() {
+  const fileInput = document.getElementById('g-file');
+  const nameInput = document.getElementById('g-name');
+  if (!fileInput.files.length) { toast('파일을 선택해주세요', true); return; }
+  const file = fileInput.files[0];
+  const name = nameInput.value.trim() || file.name;
+
+  const btn = document.getElementById('g-upload-btn');
+  btn.disabled = true;
+  btn.textContent = '업로드 중...';
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('name', name);
+
+  try {
+    const res = await fetch(`${API}/v1/guide/upload`, { method:'POST', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(err.detail || '업로드 실패', true);
+      return;
+    }
+    toast('✓ 업로드됨. AI가 규칙을 추출 중입니다.');
+    fileInput.value = '';
+    nameInput.value = '';
+    loadGuides();
+  } catch(e) {
+    toast('오류: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '업로드';
+  }
+}
+
+async function loadGuides() {
+  try {
+    const res = await fetch(`${API}/v1/guide/list`);
+    const data = await res.json();
+    document.getElementById('g-count').textContent = data.total;
+    renderGuides(data.items);
+  } catch(e) { toast('가이드 목록 로드 실패', true); }
+}
+
+function renderGuides(items) {
+  const el = document.getElementById('g-list');
+  if (!items || !items.length) {
+    el.innerHTML = '<div class="empty">아직 업로드된 가이드가 없습니다.</div>';
+    return;
+  }
+  el.innerHTML = items.map(g => {
+    let statusBadge;
+    if (g.status === 'done') statusBadge = `<span class="score score-hi">완료</span>`;
+    else if (g.status === 'failed') statusBadge = `<span class="score" style="background:#fee2e2;color:#b91c1c">실패</span>`;
+    else statusBadge = `<span class="score score-md">${g.status} ${g.progress}%</span>`;
+
+    const errorLine = g.error_msg ? `<div style="color:#dc2626;font-size:.75rem;margin-top:4px">⚠ ${esc(g.error_msg)}</div>` : '';
+    const isActive = currentGuideId === g.guide_id ? 'border-color:#7c8cf8;background:#eef2ff' : '';
+    return `<div style="border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;${isActive}">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.9rem;font-weight:500;color:#0f172a">${esc(g.name)} ${statusBadge}</div>
+        <div style="font-size:.75rem;color:#64748b;margin-top:2px">
+          ${esc(g.source_file)} · ${g.page_count}페이지 · 규칙 ${g.rule_count}개
+        </div>
+        ${errorLine}
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn-outline btn-sm" onclick="openGuide('${g.guide_id}')" ${g.status !== 'done' && g.rule_count === 0 ? 'disabled' : ''}>열기</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteGuide('${g.guide_id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function startGuidePolling() {
+  if (guidePollTimer) return;
+  guidePollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`${API}/v1/guide/list`);
+      const data = await res.json();
+      const hasActive = (data.items || []).some(g => g.status === 'parsing' || g.status === 'extracting');
+      renderGuides(data.items);
+      document.getElementById('g-count').textContent = data.total;
+      if (!hasActive) stopGuidePolling();
+    } catch {}
+  }, 3000);
+}
+
+function stopGuidePolling() {
+  if (guidePollTimer) {
+    clearInterval(guidePollTimer);
+    guidePollTimer = null;
+  }
+}
+
+async function deleteGuide(guideId) {
+  if (!confirm('이 가이드와 추출된 모든 규칙을 삭제합니다. 계속할까요?')) return;
+  try {
+    const res = await fetch(`${API}/v1/guide/${guideId}`, { method:'DELETE' });
+    if (!res.ok) { toast('삭제 실패', true); return; }
+    toast('삭제됨');
+    if (currentGuideId === guideId) {
+      currentGuideId = null;
+      document.getElementById('g-rules-card').style.display = 'none';
+    }
+    loadGuides();
+  } catch(e) { toast('오류: ' + e.message, true); }
+}
+
+async function openGuide(guideId) {
+  currentGuideId = guideId;
+  await loadRules();
+  loadGuides();  // 활성 표시 갱신
+  document.getElementById('g-rules-card').style.display = 'block';
+  // Q&A가 이미 있는지 확인하고 카드 표시
+  await loadQA();
+  document.getElementById('g-rules-card').scrollIntoView({ behavior:'smooth' });
+}
+
+async function loadRules() {
+  if (!currentGuideId) return;
+  try {
+    const res = await fetch(`${API}/v1/guide/${currentGuideId}/rules`);
+    const data = await res.json();
+    currentRules = data.items || [];
+
+    const guides = await fetch(`${API}/v1/guide/list`).then(r => r.json());
+    const g = (guides.items || []).find(x => x.guide_id === currentGuideId);
+    document.getElementById('g-rules-title').textContent =
+      g ? `${g.name} — ${data.total}개 규칙` : `규칙 ${data.total}개`;
+
+    renderRules();
+  } catch(e) { toast('규칙 로드 실패', true); }
+}
+
+function renderRules() {
+  const el = document.getElementById('g-rules-list');
+  const fc = document.getElementById('g-filter-cat').value;
+  const fs = document.getElementById('g-filter-sev').value;
+  const fr = document.getElementById('g-filter-rev').value;
+
+  const filtered = currentRules.filter(r =>
+    (!fc || r.category === fc) &&
+    (!fs || r.severity === fs) &&
+    (fr === '' || String(r.reviewed) === fr)
+  );
+
+  if (!filtered.length) {
+    el.innerHTML = '<div class="empty">조건에 맞는 규칙이 없습니다.</div>';
+    updateMergeBtn();
+    return;
+  }
+
+  el.innerHTML = filtered.map(r => {
+    const sevColor = r.severity === 'must' ? 'background:#fee2e2;color:#b91c1c' :
+                     r.severity === 'should' ? 'background:#fef3c7;color:#92400e' :
+                     r.severity === 'may' ? 'background:#dbeafe;color:#1e40af' :
+                     'background:#f1f5f9;color:#64748b';
+    const revBadge = r.reviewed ? '<span class="score score-hi" style="margin-left:6px">검수✓</span>' : '';
+    const editedBadge = r.user_edited ? '<span style="font-size:.7rem;color:#7c8cf8;margin-left:6px">편집됨</span>' : '';
+    const codePreview = r.code_bad || r.code_good ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:.75rem;color:#64748b">코드 예시 보기</summary>
+      ${r.code_bad ? `<pre style="background:#fef2f2;padding:8px;border-radius:4px;font-size:.75rem;overflow-x:auto;margin-top:6px">❌ ${esc(r.code_bad)}</pre>` : ''}
+      ${r.code_good ? `<pre style="background:#f0fdf4;padding:8px;border-radius:4px;font-size:.75rem;overflow-x:auto;margin-top:6px">✅ ${esc(r.code_good)}</pre>` : ''}
+    </details>` : '';
+
+    return `<div style="border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <input type="checkbox" class="rule-chk" value="${r.rule_id}" onchange="updateMergeBtn()" style="accent-color:#7c8cf8;margin-top:4px;flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.875rem;font-weight:500;color:#0f172a">
+            ${esc(r.section_label)} ${esc(r.title)}
+            <span class="score" style="${sevColor};margin-left:6px">${r.severity}</span>
+            <span style="font-size:.7rem;color:#7c8cf8;background:#eef2ff;padding:2px 6px;border-radius:8px;margin-left:4px">${esc(r.category)}</span>
+            ${revBadge}${editedBadge}
+          </div>
+          <div style="font-size:.825rem;color:#475569;margin-top:6px;line-height:1.5">${esc(r.body)}</div>
+          ${r.source_pages ? `<div style="font-size:.7rem;color:#94a3b8;margin-top:4px">📄 페이지 ${esc(r.source_pages)}</div>` : ''}
+          ${codePreview}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+          <button class="btn btn-outline btn-sm" onclick="openRuleEdit('${r.rule_id}')">편집</button>
+          <button class="btn btn-outline btn-sm" onclick="toggleReviewed('${r.rule_id}', ${r.reviewed ? 0 : 1})">${r.reviewed ? '✗ 검수해제' : '✓ 검수완료'}</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRule('${r.rule_id}')">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  updateMergeBtn();
+}
+
+function updateMergeBtn() {
+  const checked = document.querySelectorAll('.rule-chk:checked').length;
+  document.getElementById('g-merge-btn').disabled = checked < 2;
+  document.getElementById('g-merge-btn').textContent = checked < 2 ? '선택 병합' : `${checked}개 병합`;
+}
+
+async function deleteRule(ruleId) {
+  if (!confirm('이 규칙을 삭제할까요?')) return;
+  try {
+    const res = await fetch(`${API}/v1/guide/rules/${ruleId}`, { method:'DELETE' });
+    if (!res.ok) { toast('삭제 실패', true); return; }
+    toast('삭제됨');
+    loadRules();
+  } catch(e) { toast('오류: ' + e.message, true); }
+}
+
+async function toggleReviewed(ruleId, newVal) {
+  try {
+    const res = await fetch(`${API}/v1/guide/rules/${ruleId}`, {
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ reviewed: newVal })
+    });
+    if (!res.ok) { toast('변경 실패', true); return; }
+    loadRules();
+  } catch(e) { toast('오류: ' + e.message, true); }
+}
+
+function openRuleEdit(ruleId) {
+  const r = currentRules.find(x => x.rule_id === ruleId);
+  if (!r) return;
+  document.getElementById('re-id').value = r.rule_id;
+  document.getElementById('re-section').value = r.section_label;
+  document.getElementById('re-title-input').value = r.title;
+  document.getElementById('re-body').value = r.body;
+  document.getElementById('re-cat').value = r.category;
+  document.getElementById('re-sev').value = r.severity;
+  document.getElementById('re-bad').value = r.code_bad;
+  document.getElementById('re-good').value = r.code_good;
+  document.getElementById('rule-edit-title').textContent = '규칙 편집';
+  document.getElementById('rule-edit-modal').classList.add('open');
+}
+
+function addManualRule() {
+  if (!currentGuideId) return;
+  document.getElementById('re-id').value = '';   // 신규
+  document.getElementById('re-section').value = '';
+  document.getElementById('re-title-input').value = '';
+  document.getElementById('re-body').value = '';
+  document.getElementById('re-cat').value = '기타';
+  document.getElementById('re-sev').value = 'unknown';
+  document.getElementById('re-bad').value = '';
+  document.getElementById('re-good').value = '';
+  document.getElementById('rule-edit-title').textContent = '규칙 추가';
+  document.getElementById('rule-edit-modal').classList.add('open');
+}
+
+async function saveRuleEdit() {
+  const ruleId = document.getElementById('re-id').value;
+  const payload = {
+    section_label: document.getElementById('re-section').value.trim(),
+    title: document.getElementById('re-title-input').value.trim(),
+    body: document.getElementById('re-body').value.trim(),
+    category: document.getElementById('re-cat').value,
+    severity: document.getElementById('re-sev').value,
+    code_bad: document.getElementById('re-bad').value,
+    code_good: document.getElementById('re-good').value,
+  };
+  if (!payload.title || !payload.body) {
+    toast('제목과 본문은 필수입니다', true);
+    return;
+  }
+
+  try {
+    let res;
+    if (ruleId) {
+      res = await fetch(`${API}/v1/guide/rules/${ruleId}`, {
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+    } else {
+      res = await fetch(`${API}/v1/guide/${currentGuideId}/rules`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(err.detail || '저장 실패', true);
+      return;
+    }
+    toast('저장됨');
+    closeRuleEditModal();
+    loadRules();
+  } catch(e) { toast('오류: ' + e.message, true); }
+}
+
+function closeRuleEditModal(e) {
+  if (e && e.target !== document.getElementById('rule-edit-modal')) return;
+  document.getElementById('rule-edit-modal').classList.remove('open');
+}
+
+async function mergeSelected() {
+  const ids = [...document.querySelectorAll('.rule-chk:checked')].map(c => c.value);
+  if (ids.length < 2) return;
+
+  const title = prompt('병합 후 제목 (한 줄):');
+  if (!title) return;
+  const body = prompt('병합 후 본문 (여러 줄 가능):');
+  if (!body) return;
+
+  // 첫 선택 규칙의 카테고리/심각도 디폴트
+  const first = currentRules.find(r => r.rule_id === ids[0]);
+  try {
+    const res = await fetch(`${API}/v1/guide/rules/merge`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        rule_ids: ids,
+        merged_title: title,
+        merged_body: body,
+        category: first ? first.category : '기타',
+        severity: first ? first.severity : 'unknown',
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(err.detail || '병합 실패', true);
+      return;
+    }
+    toast(`✓ ${ids.length}개 → 1개로 병합`);
+    loadRules();
+  } catch(e) { toast('오류: ' + e.message, true); }
+}
+
+async function finalizeGuide() {
+  if (!currentGuideId) return;
+  try {
+    const res = await fetch(`${API}/v1/guide/${currentGuideId}/finalize`, { method:'POST' });
+    const data = await res.json();
+    alert(`✅ 구조 확정 완료\n규칙 ${data.rule_count}개\n\n${data.message}`);
+  } catch(e) { toast('오류: ' + e.message, true); }
+}
+
+// ─── Q&A 생성/검수 ────────────────────────────────────
+let currentQA = [];
+let qaPollTimer = null;
+
+function openQAGenerate() {
+  if (!currentGuideId) { toast('가이드를 먼저 선택하세요', true); return; }
+  updateQAEstimate();
+  document.getElementById('qa-gen-count').onchange = updateQAEstimate;
+  document.getElementById('qa-gen-only-reviewed').onchange = updateQAEstimate;
+  document.getElementById('qa-gen-modal').classList.add('open');
+}
+
+function updateQAEstimate() {
+  const count = parseInt(document.getElementById('qa-gen-count').value);
+  const onlyReviewed = document.getElementById('qa-gen-only-reviewed').checked;
+  const ruleCount = onlyReviewed
+    ? currentRules.filter(r => r.reviewed).length
+    : currentRules.length;
+  const total = ruleCount * count;
+  const minPerRule = 30, maxPerRule = 90;  // qwen3.5:4b 기준 추정 (초)
+  const minMin = Math.round(ruleCount * minPerRule / 60);
+  const maxMin = Math.round(ruleCount * maxPerRule / 60);
+  document.getElementById('qa-gen-estimate').innerHTML =
+    `대상 규칙: <strong>${ruleCount}</strong>개 → 예상 Q&A <strong>${total}</strong>개<br>` +
+    `예상 소요: 약 <strong>${minMin}~${maxMin}분</strong> (모델/하드웨어에 따라 변동)`;
+}
+
+function closeQAGenModal(e) {
+  if (e && e.target !== document.getElementById('qa-gen-modal')) return;
+  document.getElementById('qa-gen-modal').classList.remove('open');
+}
+
+async function startQAGeneration() {
+  const count = parseInt(document.getElementById('qa-gen-count').value);
+  const onlyReviewed = document.getElementById('qa-gen-only-reviewed').checked;
+  const overwrite = document.getElementById('qa-gen-overwrite').checked;
+
+  if (overwrite && !confirm('승인된 Q&A 포함 모든 기존 Q&A가 삭제됩니다. 계속할까요?')) return;
+
+  try {
+    const res = await fetch(`${API}/v1/guide/${currentGuideId}/generate_qa`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        count_per_rule: count,
+        only_reviewed: onlyReviewed,
+        overwrite: overwrite,
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(err.detail || '생성 시작 실패', true);
+      return;
+    }
+    const data = await res.json();
+    toast(`✓ Q&A 생성 시작: ${data.estimated_total}개 예상`);
+    closeQAGenModal();
+    document.getElementById('g-qa-card').style.display = 'block';
+    document.getElementById('g-qa-card').scrollIntoView({ behavior:'smooth' });
+    loadQA();
+    startQAPolling();
+  } catch(e) { toast('오류: ' + e.message, true); }
+}
+
+function startQAPolling() {
+  if (qaPollTimer) return;
+  let lastTotal = -1;
+  let stableCount = 0;
+  qaPollTimer = setInterval(async () => {
+    if (!currentGuideId) { stopQAPolling(); return; }
+    try {
+      const res = await fetch(`${API}/v1/guide/${currentGuideId}/qa?status=pending`);
+      const data = await res.json();
+      // 변화가 없으면 stableCount 증가, 5회 연속 변화 없으면 폴링 중단
+      if (data.total === lastTotal) {
+        stableCount += 1;
+        if (stableCount >= 5) stopQAPolling();
+      } else {
+        stableCount = 0;
+        lastTotal = data.total;
+        loadQA();  // 새 Q&A 발견 시 갱신
+      }
+    } catch {}
+  }, 5000);
+}
+
+function stopQAPolling() {
+  if (qaPollTimer) {
+    clearInterval(qaPollTimer);
+    qaPollTimer = null;
+  }
+}
+
+async function loadQA() {
+  if (!currentGuideId) return;
+  const status = document.getElementById('g-qa-filter-status').value;
+  const qaType = document.getElementById('g-qa-filter-type').value;
+  const ruleId = document.getElementById('g-qa-filter-rule').value;
+  let url = `${API}/v1/guide/${currentGuideId}/qa`;
+  const params = [];
+  if (status) params.push(`status=${status}`);
+  if (qaType) params.push(`qa_type=${qaType}`);
+  if (ruleId) params.push(`rule_id=${ruleId}`);
+  if (params.length) url += '?' + params.join('&');
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    currentQA = data.items || [];
+
+    document.getElementById('g-qa-title').textContent = `생성된 Q&A (${data.total}개)`;
+    document.getElementById('g-qa-stats').innerHTML =
+      `대기 <strong style="color:#7c8cf8">${data.pending}</strong> · ` +
+      `승인 <strong style="color:#16a34a">${data.approved}</strong> · ` +
+      `거절 <strong style="color:#dc2626">${data.rejected}</strong>`;
+
+    // 규칙 필터 옵션 갱신 (현재 가이드의 규칙들)
+    const ruleSelect = document.getElementById('g-qa-filter-rule');
+    if (ruleSelect.options.length <= 1 && currentRules.length) {
+      const currentVal = ruleSelect.value;
+      ruleSelect.innerHTML = '<option value="">전체 규칙</option>' +
+        currentRules.map(r => `<option value="${r.rule_id}">${esc(r.section_label)} ${esc(r.title.slice(0,40))}</option>`).join('');
+      ruleSelect.value = currentVal;
+    }
+
+    renderQA();
+    if (data.total > 0) {
+      document.getElementById('g-qa-card').style.display = 'block';
+    }
+  } catch(e) { toast('Q&A 로드 실패', true); }
+}
+
+function renderQA() {
+  const el = document.getElementById('g-qa-list');
+  if (!currentQA.length) {
+    el.innerHTML = '<div class="empty">조건에 맞는 Q&A가 없습니다.</div>';
+    updateQABulkBtns();
+    return;
+  }
+
+  const typeLabel = {
+    code_review: '🔍 코드 리뷰',
+    code_gen:    '✍️ 코드 생성',
+    concept:     '💡 개념',
+    refusal:     '🛑 거절',
+  };
+  const typeColor = {
+    code_review: 'background:#fef3c7;color:#92400e',
+    code_gen:    'background:#dbeafe;color:#1e40af',
+    concept:     'background:#e0e7ff;color:#4338ca',
+    refusal:     'background:#fee2e2;color:#b91c1c',
+  };
+  const statusColor = {
+    pending:  'background:#f1f5f9;color:#475569',
+    approved: 'background:#dcfce7;color:#166534',
+    rejected: 'background:#fee2e2;color:#991b1b',
+  };
+
+  el.innerHTML = currentQA.map(q => {
+    const typeBadge = `<span class="score" style="${typeColor[q.qa_type] || ''}">${typeLabel[q.qa_type] || q.qa_type}</span>`;
+    const statusBadge = `<span class="score" style="${statusColor[q.status] || ''}">${q.status}</span>`;
+    const editedBadge = q.user_edited ? '<span style="font-size:.7rem;color:#7c8cf8;margin-left:4px">편집됨</span>' : '';
+    const ruleHint = q.rule_section_label ? `<span style="font-size:.72rem;color:#7c8cf8">${esc(q.rule_section_label)}</span>` : '';
+    return `<div style="border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;margin-bottom:8px;background:${q.status==='approved'?'#f0fdf4':q.status==='rejected'?'#fef2f2':'#fff'}">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <input type="checkbox" class="qa-chk" value="${q.qa_id}" onchange="updateQABulkBtns()" style="accent-color:#7c8cf8;margin-top:4px;flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+            ${typeBadge} ${statusBadge} ${ruleHint} ${editedBadge}
+          </div>
+          <div style="font-size:.825rem;color:#0f172a;font-weight:500;margin-bottom:6px">Q: ${esc(q.instruction.slice(0, 200))}${q.instruction.length > 200 ? '...' : ''}</div>
+          <details>
+            <summary style="cursor:pointer;font-size:.78rem;color:#64748b">답변 보기 (${q.output.length}자)</summary>
+            <pre style="background:#f8fafc;padding:10px;border-radius:4px;font-size:.78rem;white-space:pre-wrap;word-break:break-word;margin-top:6px;line-height:1.6">${esc(q.output)}</pre>
+          </details>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+          ${q.status !== 'approved' ? `<button class="btn btn-primary btn-sm" onclick="setQAStatus('${q.qa_id}','approved')">✓ 승인</button>` : ''}
+          ${q.status !== 'rejected' ? `<button class="btn btn-outline btn-sm" onclick="setQAStatus('${q.qa_id}','rejected')">✗ 거절</button>` : ''}
+          <button class="btn btn-outline btn-sm" onclick="openQAEdit('${q.qa_id}')">편집</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteQA('${q.qa_id}')">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  updateQABulkBtns();
+}
+
+function updateQABulkBtns() {
+  const checked = document.querySelectorAll('.qa-chk:checked').length;
+  document.getElementById('g-qa-selected-count').textContent = checked;
+  for (const id of ['g-qa-bulk-approve','g-qa-bulk-reject','g-qa-bulk-delete']) {
+    document.getElementById(id).disabled = checked === 0;
+  }
+}
+
+async function setQAStatus(qaId, status) {
+  try {
+    const res = await fetch(`${API}/v1/guide/qa/${qaId}`, {
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ status })
+    });
+    if (!res.ok) { toast('변경 실패', true); return; }
+    toast(status === 'approved' ? '승인됨' : '거절됨');
+    loadQA();
+  } catch(e) { toast('오류: ' + e.message, true); }
+}
+
+async function deleteQA(qaId) {
+  if (!confirm('이 Q&A를 삭제할까요?')) return;
+  try {
+    const res = await fetch(`${API}/v1/guide/qa/${qaId}`, { method:'DELETE' });
+    if (!res.ok) { toast('삭제 실패', true); return; }
+    toast('삭제됨');
+    loadQA();
+  } catch(e) { toast('오류: ' + e.message, true); }
+}
+
+async function bulkQAAction(action) {
+  const ids = [...document.querySelectorAll('.qa-chk:checked')].map(c => c.value);
+  if (!ids.length) return;
+  const labels = { approve: '승인', reject: '거절', delete: '삭제' };
+  if (action === 'delete' && !confirm(`${ids.length}개 Q&A를 삭제할까요?`)) return;
+  try {
+    const res = await fetch(`${API}/v1/guide/qa/bulk`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ qa_ids: ids, action })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(err.detail || `${labels[action]} 실패`, true);
+      return;
+    }
+    const data = await res.json();
+    toast(`✓ ${data.affected}개 ${labels[action]}됨`);
+    loadQA();
+  } catch(e) { toast('오류: ' + e.message, true); }
+}
+
+function openQAEdit(qaId) {
+  const q = currentQA.find(x => x.qa_id === qaId);
+  if (!q) return;
+  document.getElementById('qe-id').value = q.qa_id;
+  document.getElementById('qe-type').value = q.qa_type;
+  document.getElementById('qe-instruction').value = q.instruction;
+  document.getElementById('qe-output').value = q.output;
+  document.getElementById('qe-meta').innerHTML =
+    `규칙: <strong>${esc(q.rule_section_label)} ${esc(q.rule_title)}</strong> · ` +
+    `카테고리: ${esc(q.rule_category)} · 상태: ${q.status}`;
+  document.getElementById('qa-edit-modal').classList.add('open');
+}
+
+function closeQAEditModal(e) {
+  if (e && e.target !== document.getElementById('qa-edit-modal')) return;
+  document.getElementById('qa-edit-modal').classList.remove('open');
+}
+
+async function saveQAEdit() {
+  const qaId = document.getElementById('qe-id').value;
+  const payload = {
+    instruction: document.getElementById('qe-instruction').value.trim(),
+    output: document.getElementById('qe-output').value.trim(),
+    qa_type: document.getElementById('qe-type').value,
+  };
+  if (!payload.instruction || !payload.output) {
+    toast('질문과 답변은 필수입니다', true);
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/v1/guide/qa/${qaId}`, {
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast(err.detail || '저장 실패', true);
+      return;
+    }
+    toast('저장됨');
+    closeQAEditModal();
+    loadQA();
+  } catch(e) { toast('오류: ' + e.message, true); }
 }
 
 // ─── Summary ─────────────────────────────────────────

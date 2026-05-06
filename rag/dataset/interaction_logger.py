@@ -62,14 +62,51 @@ class InteractionLogger:
                     created_at      TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS manual_entries (
+                    entry_id    TEXT PRIMARY KEY,
+                    instruction TEXT NOT NULL,
+                    output      TEXT NOT NULL,
+                    created_at  TEXT
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_interactions_namespace
                     ON interactions(namespace);
                 CREATE INDEX IF NOT EXISTS idx_interactions_rating
                     ON interactions(user_rating);
                 CREATE INDEX IF NOT EXISTS idx_interactions_created
                     ON interactions(created_at);
+                CREATE INDEX IF NOT EXISTS idx_manual_created
+                    ON manual_entries(created_at);
             """)
             await db.commit()
+
+    async def log_manual(self, instruction: str, output: str) -> str:
+        entry_id = str(uuid.uuid4())
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "INSERT INTO manual_entries (entry_id, instruction, output, created_at) VALUES (?, ?, ?, ?)",
+                (entry_id, instruction, output, datetime.utcnow().isoformat()),
+            )
+            await db.commit()
+        return entry_id
+
+    async def list_manual(self, limit: int = 100, offset: int = 0) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM manual_entries ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (limit, offset),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    async def delete_manual(self, entry_id: str) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM manual_entries WHERE entry_id = ?", (entry_id,)
+            )
+            await db.commit()
+        return cursor.rowcount > 0
 
     async def log(self, record: InteractionRecord) -> str:
         async with aiosqlite.connect(self.db_path) as db:

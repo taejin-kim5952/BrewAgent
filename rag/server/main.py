@@ -18,6 +18,7 @@ from .routes import (
     collections_router,
     dataset_router,
     eval_router,
+    guide_router,
 )
 
 
@@ -58,6 +59,7 @@ app.include_router(ingest_router)
 app.include_router(collections_router)
 app.include_router(dataset_router)
 app.include_router(eval_router)
+app.include_router(guide_router)
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 if _STATIC_DIR.is_dir():

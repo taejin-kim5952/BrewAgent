@@ -11,6 +11,7 @@ from ..llm_router import LLMRouter, PromptBuilder, OllamaBackend, OpenAIBackend
 from ..evaluation import EvaluationEngine
 from ..memory import KnowledgeStore, ResponseCache
 from ..dataset import InteractionLogger, JSONLExporter
+from ..dataset.guide_store import GuideStore
 from ..tools import default_registry, ToolExecutor
 
 
@@ -70,6 +71,7 @@ class AppContainer:
         self.knowledge_store = KnowledgeStore(settings.storage.path / "knowledge")
         self.response_cache = ResponseCache(ttl_seconds=300)
         self.interaction_logger = InteractionLogger(settings.storage.interactions_db)
+        self.guide_store = GuideStore(settings.storage.interactions_db)
         self.exporter = JSONLExporter()
 
         # Tools
@@ -90,6 +92,7 @@ class AppContainer:
     async def startup(self) -> None:
         await self.metadata_store.init()
         await self.interaction_logger.init()
+        await self.guide_store.init()
 
     async def shutdown(self) -> None:
         for store in self._faiss_stores.values():
