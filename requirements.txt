@@ -42,3 +42,7 @@ loguru==0.7.2
 
 # Async utilities
 anyio==4.3.0
+
+# Streamlit UI (frontend)
+streamlit==1.39.0
+requests==2.32.3
